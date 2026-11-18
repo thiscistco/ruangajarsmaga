@@ -32,8 +32,23 @@ Pengujian otomatis memverifikasi izin, isolasi sekolah, pratinjau tanpa penghapu
 
 ## Tambah guru/siswa sekaligus akun
 
-Migrasi `202611180009_add_profile_account.sql` menambahkan transaksi service-role-only untuk profil, keanggotaan aktif, enrollment siswa, dan audit. **Tambah Guru** meminta nama, email login (juga email profil), dan password. **Tambah Siswa** meminta nama, email login, password, NIS, serta kelas semester aktif; tombol simpan dinonaktifkan bila tidak tersedia kelas aktif. Password tetap memiliki ikon lihat/sembunyikan dan validasi 8–128 karakter.
+Migrasi `202611180009_add_profile_account.sql` menambahkan transaksi service-role-only untuk profil, keanggotaan aktif, enrollment siswa, dan audit. **Tambah Guru** meminta nama, email login (juga email profil), dan password. **Tambah Siswa** meminta nama, email login, password serta kelas semester aktif (NIS tidak lagi diperlukan setelah migrasi 010); tombol simpan dinonaktifkan bila tidak tersedia kelas aktif. Password tetap memiliki ikon lihat/sembunyikan dan validasi 8–128 karakter.
 
 Server membuat akun Auth terlebih dahulu, kemudian memanggil RPC dengan identitas admin yang sudah diverifikasi. Jika transaksi database gagal, server mencoba menghapus hanya akun Auth baru itu; bila pembersihan gagal, pesan meminta pengelola memeriksa Auth. Akun lama/email yang sudah terdaftar tidak diambil alih. Password tidak masuk profil, audit, atau respons API. Gangguan jaringan/server antara Auth dan transaksi masih dapat memerlukan pemeriksaan manual; keduanya bukan satu transaksi lintas layanan.
 
-Impor Excel tetap membuat profil saja. **Buat Akun** masih tersedia pada profil lama/hasil impor tanpa akun. Tidak ada pembuatan akun otomatis untuk data lama, perubahan akun admin, atau perubahan halaman login guru/siswa pada fitur ini. Pengujian database dan build dijalankan; uji browser/Auth end-to-end dengan akun privat belum dilakukan.
+Impor Excel guru/siswa kini membuat akun juga (lihat format migrasi 010 di bawah). **Buat Akun** masih tersedia pada profil lama/hasil impor tanpa akun. Tidak ada pembuatan akun otomatis untuk data lama, perubahan akun admin, atau perubahan halaman login guru/siswa pada fitur ini. Pengujian database dan build dijalankan; uji browser/Auth end-to-end dengan akun privat belum dilakukan.
+
+
+## Impor akun dan antarmuka (migrasi 010)
+
+`202611180010_account_import.sql` membuat NIS nullable (nilai lama dipertahankan), mengubah edit siswa agar tidak membutuhkan/menghapus NIS, dan menambahkan RPC impor akun khusus service role. Tidak perlu mengulang migrasi lama. Impor profil lama guru/siswa pada endpoint web digantikan dengan **Impor Akun**; impor kelas/mapel/penugasan tidak berubah.
+
+Format Excel: **Role, Nama, Email, Password, Kelas**. Kolom Kelas tetap ada, tetapi boleh kosong untuk guru; siswa wajib kelas semester aktif. Role hanya `guru` atau `siswa`, dapat dicampur dalam satu file. Maksimal 20 baris / 1 MB untuk membatasi pekerjaan Auth dalam satu request. Satu baris per email. Format sel sebagai teks; spasi password tidak dipangkas. Jangan bagikan file kredensial atau unggah ke chat. File tidak disimpan di server/Git; respons dan audit tidak memuat password.
+
+- Profil guru lama: email dan nama harus cocok (abaikan kapitalisasi/spasi luar). Nama sama/email berbeda atau email sama/nama berbeda dilaporkan.
+- Profil siswa lama: nama harus unik dalam sekolah dan enrollment kelas harus cocok. Nama ganda atau kelas berbeda dilaporkan untuk diperiksa; tidak menebak identitas.
+- Profil tanpa akun yang cocok ditautkan, profil baru dibuat. Profil yang sudah tertaut dilewati tanpa reset password/aktivasi ulang. Akun Auth lama yang belum tertaut tidak diambil alih; email terdaftar ditolak.
+- Ringkasan memisahkan profil baru, akun ditautkan, dilewati, dan kesalahan per baris. Batch tidak atomik: baris sukses tetap tersimpan walaupun baris lain gagal. Batas waktu batch bisa menghasilkan baris belum diproses; ulangi hanya baris tersebut. Bila respons hilang/koneksi putus, periksa profil dan Auth sebelum mengulang.
+- Auth dan database bukan satu transaksi lintas layanan; rollback database diikuti upaya hapus Auth baru. Kegagalan pembersihan diberitahukan untuk pemeriksaan manual.
+
+Label statis “Workspace lokal” diganti “Portal Admin Sekolah”; label itu bukan deteksi lingkungan. Sidebar desktop dapat diperkecil menjadi ikon; preferensi tersimpan di localStorage browser tanpa kredensial. Mobile tetap memakai menu overlay. Tes database, parser Excel, dan alur Auth mock dijalankan; uji browser dan Auth cloud end-to-end belum dilakukan.

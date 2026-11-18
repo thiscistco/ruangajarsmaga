@@ -3,6 +3,8 @@ import {cookies,headers} from 'next/headers';
 import {createServerClient} from '@supabase/ssr';
 import {createClient} from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import {parseAccountWorkbook,importAccounts} from '../../../lib/account-import.mjs';
+export const maxDuration=60;
 export const dynamic='force-dynamic';
 const json=(data,status=200)=>R.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 const err=(error,status=400)=>json({error},status);
@@ -30,7 +32,7 @@ async function read(db,s){
  const cls=id=>classes.find(x=>x.id===id)?.name??'—', subj=id=>subjects.find(x=>x.id===id)?.name??'—', student=id=>students.find(x=>x.id===id)?.name??'—';
  const ctx=id=>{const a=assignments.find(x=>x.id===id);return {guru:a?.teacher_id,kelas:cls(a?.class_id)}};
  const gradeOrder=['X','XI','XII'];
- return {penugasan:assignments.map(a=>({id:a.id,guruId:a.teacher_id,kelasId:a.class_id,mapelId:a.subject_id,nama:teachers.find(t=>t.id===a.teacher_id)?.name,kelas:cls(a.class_id),mapel:subj(a.subject_id),semester:terms.find(t=>t.id===classes.find(c=>c.id===a.class_id)?.term_id)})),pengaturan:{nama:schools[0]?.name,aktif:terms.find(t=>t.active),semester:terms.sort((a,b)=>b.academic_year.localeCompare(a.academic_year)||b.semester.localeCompare(a.semester))},guru:teachers.flatMap(t=>{const aa=assignments.filter(a=>a.teacher_id===t.id);const base={id:t.id,nama:t.name,email:t.email,hasAccount:!!t.user_id,aktif:members.some(m=>m.role==='teacher'&&m.user_id===t.user_id&&m.active)};if(!aa.length)return[{...base,mapel:'—',kelas:'—',rowKey:t.id+'-x'}];const groups=new Map();aa.forEach(a=>{const c=classes.find(x=>x.id===a.class_id);const key=a.subject_id+'|'+(c?c.grade:'');if(!groups.has(key))groups.set(key,{subject:a.subject_id,grade:c?c.grade:'',ids:[]});groups.get(key).ids.push(a.class_id)});return[...groups.values()].sort((x,y)=>subj(x.subject).localeCompare(subj(y.subject),'id')||gradeOrder.indexOf(x.grade)-gradeOrder.indexOf(y.grade)).map(g=>({...base,mapel:subj(g.subject),kelas:g.grade,kelasDetail:[...new Set(g.ids)].map(id=>cls(id)).sort((a,b)=>a.localeCompare(b,'id',{numeric:true})).join(', '),rowKey:t.id+'-'+g.subject+'-'+g.grade}))}),siswa:students.map(t=>({id:t.id,nama:t.name,nis:t.nis,hasAccount:!!t.user_id,kelas:enrollments.filter(e=>e.student_id===t.id).map(e=>cls(e.class_id)).sort((a,b)=>a.localeCompare(b,'id',{numeric:true})).join(', ')})),kelas:classes.map(c=>({id:c.id,nama:c.name,tingkat:c.grade,termId:c.term_id})).sort((a,b)=>a.nama.localeCompare(b.nama,'id',{numeric:true})),mapel:subjects.map(c=>({id:c.id,nama:c.name})),absensi:attendance.map(a=>({id:a.id,nama:student(a.student_id),tanggal:a.day,status:a.status,...ctx(a.assignment_id)})),materi:materials.map(a=>({id:a.id,nama:a.title,isi:a.body,status:a.published_at?'Terbit':'Draf',penerbit:a.published_by,...ctx(a.assignment_id)})),jurnal:journals.map(a=>({id:a.id,nama:a.title,tanggal:a.day,...ctx(a.assignment_id)})),nilai:grades.map(a=>({id:a.id,nama:student(a.student_id),nilai:a.score,...ctx(a.assignment_id)})),riwayat:audit.sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(a=>({id:a.id,nama:({teacher_permanent_delete:'Guru dihapus permanen',create_profile_account:'Profil dan akun login dibuat',create_account:'Akun login dibuat',publish_material:'Materi diterbitkan',correct_attendance:'Absensi dikoreksi',teacher_preview:'Pratinjau guru dibuka',school_settings:'Pengaturan sekolah diperbarui',teacher_assignment:'Penugasan guru dibuat',assignment_catalog:'Data penugasan ditambahkan',catalog_edit:'Data diperbarui',catalog_delete:'Data dihapus'})[a.action]||a.action,detail:a.detail.reason?`${a.detail.before} → ${a.detail.after} · ${a.detail.reason}`:a.detail.year?`${a.detail.name} · ${a.detail.year} · ${a.detail.semester}`:a.entity_id,pelaku:a.actor_id,waktu:a.created_at}))};
+ return {penugasan:assignments.map(a=>({id:a.id,guruId:a.teacher_id,kelasId:a.class_id,mapelId:a.subject_id,nama:teachers.find(t=>t.id===a.teacher_id)?.name,kelas:cls(a.class_id),mapel:subj(a.subject_id),semester:terms.find(t=>t.id===classes.find(c=>c.id===a.class_id)?.term_id)})),pengaturan:{nama:schools[0]?.name,aktif:terms.find(t=>t.active),semester:terms.sort((a,b)=>b.academic_year.localeCompare(a.academic_year)||b.semester.localeCompare(a.semester))},guru:teachers.flatMap(t=>{const aa=assignments.filter(a=>a.teacher_id===t.id);const base={id:t.id,nama:t.name,email:t.email,hasAccount:!!t.user_id,aktif:members.some(m=>m.role==='teacher'&&m.user_id===t.user_id&&m.active)};if(!aa.length)return[{...base,mapel:'—',kelas:'—',rowKey:t.id+'-x'}];const groups=new Map();aa.forEach(a=>{const c=classes.find(x=>x.id===a.class_id);const key=a.subject_id+'|'+(c?c.grade:'');if(!groups.has(key))groups.set(key,{subject:a.subject_id,grade:c?c.grade:'',ids:[]});groups.get(key).ids.push(a.class_id)});return[...groups.values()].sort((x,y)=>subj(x.subject).localeCompare(subj(y.subject),'id')||gradeOrder.indexOf(x.grade)-gradeOrder.indexOf(y.grade)).map(g=>({...base,mapel:subj(g.subject),kelas:g.grade,kelasDetail:[...new Set(g.ids)].map(id=>cls(id)).sort((a,b)=>a.localeCompare(b,'id',{numeric:true})).join(', '),rowKey:t.id+'-'+g.subject+'-'+g.grade}))}),siswa:students.map(t=>({id:t.id,nama:t.name,hasAccount:!!t.user_id,kelas:enrollments.filter(e=>e.student_id===t.id).map(e=>cls(e.class_id)).sort((a,b)=>a.localeCompare(b,'id',{numeric:true})).join(', ')})),kelas:classes.map(c=>({id:c.id,nama:c.name,tingkat:c.grade,termId:c.term_id})).sort((a,b)=>a.nama.localeCompare(b.nama,'id',{numeric:true})),mapel:subjects.map(c=>({id:c.id,nama:c.name})),absensi:attendance.map(a=>({id:a.id,nama:student(a.student_id),tanggal:a.day,status:a.status,...ctx(a.assignment_id)})),materi:materials.map(a=>({id:a.id,nama:a.title,isi:a.body,status:a.published_at?'Terbit':'Draf',penerbit:a.published_by,...ctx(a.assignment_id)})),jurnal:journals.map(a=>({id:a.id,nama:a.title,tanggal:a.day,...ctx(a.assignment_id)})),nilai:grades.map(a=>({id:a.id,nama:student(a.student_id),nilai:a.score,...ctx(a.assignment_id)})),riwayat:audit.sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(a=>({id:a.id,nama:({teacher_permanent_delete:'Guru dihapus permanen',import_account:'Akun diimpor',create_profile_account:'Profil dan akun login dibuat',create_account:'Akun login dibuat',publish_material:'Materi diterbitkan',correct_attendance:'Absensi dikoreksi',teacher_preview:'Pratinjau guru dibuka',school_settings:'Pengaturan sekolah diperbarui',teacher_assignment:'Penugasan guru dibuat',assignment_catalog:'Data penugasan ditambahkan',catalog_edit:'Data diperbarui',catalog_delete:'Data dihapus'})[a.action]||a.action,detail:a.detail.reason?`${a.detail.before} → ${a.detail.after} · ${a.detail.reason}`:a.detail.year?`${a.detail.name} · ${a.detail.year} · ${a.detail.semester}`:a.entity_id,pelaku:a.actor_id,waktu:a.created_at}))};
 }
 export async function GET(req){
  const token=hosted?undefined:bearer(req);const db=await client(token);if(!db)return json({data:{},authenticated:false,configured:false});
@@ -95,7 +97,7 @@ export async function POST(req){
   if(typeof body.password!=='string'||body.password.length<8||body.password.length>128)return err('Kata sandi harus 8–128 karakter.');
   if(adding){
    if(typeof body.nama!=='string'||!body.nama.trim()||body.nama.trim().length>120)return err('Nama wajib diisi, maksimal 120 karakter.');
-   if(body.type==='siswa'&&(typeof body.nis!=='string'||!body.nis.trim()||body.nis.trim().length>60||typeof body.kelas!=='string'||!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(body.kelas)))return err('Isi NIS dan pilih kelas semester aktif.');
+   if(body.type==='siswa'&&(typeof body.kelas!=='string'||!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(body.kelas)))return err('Pilih kelas semester aktif.');
   }
   const table=body.type==='guru'?'teachers':'students';
   const admin=createClient(process.env.SUPABASE_URL,serviceKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
@@ -104,7 +106,7 @@ export async function POST(req){
   if(!profile)return err('Profil tidak ditemukan.',404);
   if(profile.user_id)return err('Profil ini sudah memiliki akun login.',409);
   }else{
-   const {data:duplicate,error:checkErr}=await admin.from(table).select('id').eq('school_id',s).eq(body.type==='guru'?'email':'nis',body.type==='guru'?body.email.trim().toLowerCase():body.nis.trim()).limit(1);
+   const {data:duplicate,error:checkErr}=await admin.from(table).select('id').eq('school_id',s).eq(body.type==='guru'?'email':'name',body.type==='guru'?body.email.trim().toLowerCase():body.nama.trim()).limit(1);
    if(checkErr)return err('Gagal memeriksa profil.',503);
    if(duplicate?.length)return err('Profil sudah ada. Gunakan Buat Akun pada profil tersebut jika belum memiliki akun.',409);
   }
@@ -112,16 +114,24 @@ export async function POST(req){
   if(createErr)return err(createErr.message||'Gagal membuat akun.',400);
   const uid=created.user.id;
   const {error:linkErr}=adding
-   ?await admin.rpc('add_profile_account',{s,actor:user.id,kind:body.type,account:uid,label:body.nama.trim(),email:body.email.trim().toLowerCase(),nis:body.type==='siswa'?body.nis.trim():null,class_id:body.type==='siswa'?body.kelas:null})
+   ?await admin.rpc('add_profile_account',{s,actor:user.id,kind:body.type,account:uid,label:body.nama.trim(),email:body.email.trim().toLowerCase(),nis:null,class_id:body.type==='siswa'?body.kelas:null})
    :await admin.rpc('link_school_account',{s,actor:user.id,kind:body.type,item:id,account:uid});
   if(linkErr){
    const {error:cleanupErr}=await admin.auth.admin.deleteUser(uid);
    if(cleanupErr)return err('Penautan gagal dan akun Auth belum dapat dibersihkan. Hubungi pengelola untuk memeriksa Supabase Auth sebelum mencoba lagi.',503);
-   return err(linkErr.code==='23505'?'Profil atau akun sudah terdaftar. Gunakan data yang sudah ada.':linkErr.code==='22023'?'Periksa nama, NIS, dan kelas semester aktif. Profil tidak disimpan.':'Gagal menyimpan profil dan akun. Periksa konfigurasi migrasi.',409);
+   return err(linkErr.code==='23505'?'Profil atau akun sudah terdaftar. Gunakan data yang sudah ada.':linkErr.code==='22023'?'Periksa nama dan kelas semester aktif. Profil tidak disimpan.':'Gagal menyimpan profil dan akun. Periksa konfigurasi migrasi.',409);
   }
   try{return json({data:await read(db,s)});}catch{return err('Akun dibuat, tetapi data belum bisa dimuat ulang.',503)}
  }
+ if(action==='import_accounts'){
+  if(!process.env.SUPABASE_SERVICE_ROLE_KEY)return err('Pembuatan akun belum dikonfigurasi.',503);
+  let rows;try{rows=parseAccountWorkbook(body.file)}catch(e){return err(e.message)}
+  const admin=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+  const summary=await importAccounts(admin,s,user.id,rows);
+  try{return json({data:await read(db,s),summary})}catch{return json({summary,warning:'Hasil impor tersimpan. Muat ulang halaman untuk memperbarui data.'})}
+ }
  if(action==='import'){
+  if(['guru','siswa'].includes(body.type))return err('Gunakan Impor Akun dengan kolom Role, Nama, Email, Password, Kelas.');
   const kinds={guru:['import_teachers',['nama','email']],siswa:['import_students',['nama','nis','kelas']],kelas:['import_classes',['nama','tingkat']],mapel:['import_subjects',['nama']],penugasan:['import_assignments',['guru','kelas','mapel']]};
   const spec=kinds[body.type];
   if(!spec||typeof body.file!=='string'||!body.file.length||body.file.length>15_000_000)return err('File impor tidak valid.');

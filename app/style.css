@@ -6,3 +6,7 @@
 .kelasHover{cursor:help;border-bottom:1px dotted #8a7fd6}
 
 .passwordField{display:grid;gap:4px}.passwordControl{position:relative}.dialog .passwordControl input{padding-right:48px;min-height:44px}.passwordToggle{position:absolute;right:1px;top:1px;bottom:1px;width:44px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:#65667c}.passwordToggle:hover{background:#f0eaff;color:#5931c6}
+
+.sidebarToggle{align-self:flex-end;display:grid;place-items:center;border:1px solid #e4e5ef;background:white;color:#6540cc;border-radius:8px;width:36px;height:36px;margin-bottom:12px}.sidebarToggle:hover{background:#f0eaff}
+@media(min-width:721px){.compact .side{width:78px;padding-inline:12px}.compact main{margin-left:78px}.compact .sidebarToggle{align-self:center}.compact .brand{padding:0;justify-content:center}.compact .brand>span:not(.brandIcon),.compact .school,.compact .groupToggle,.compact .navLabel,.compact .sideBottom>span:last-child{display:none}.compact .navGroup{margin:14px 0;border-bottom:1px solid #eeeef4;padding-bottom:10px}.compact .navGroup button{justify-content:center;padding:12px 0}.compact .navGroup button svg{flex-shrink:0}.compact .sideBottom{justify-content:center}}
+@media(max-width:720px){.sidebarToggle{display:none}}
