@@ -41,7 +41,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         mutable.value = mutable.value.copy(busy = true)
         viewModelScope.launch {
             val saved = withContext(Dispatchers.IO) { runCatching { repository.hasSavedSession() }.getOrDefault(false) }
-            mutable.value = mutable.value.copy(busy = false, savedSession = saved)
+            mutable.value = mutable.value.copy(busy = false, savedSession = saved, session = null)
             if (saved) authenticate { repository.restore() }
         }
     }
