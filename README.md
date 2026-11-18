@@ -21,3 +21,11 @@ Terapkan migrasi `202611180007_account_link.sql` sekali setelah migrasi sebelumn
 Admin memilih **Buat Akun** pada profil Guru/Siswa yang belum tertaut, mengisi email login dan kata sandi 8–128 karakter. Email login boleh berbeda dari email kontak guru. Akun langsung dikonfirmasi oleh admin; pastikan alamat benar dan bagikan kredensial melalui saluran aman. Email yang telah terdaftar ditolak, tidak diambil alih. Keanggotaan, penautan profil, dan audit disimpan dalam satu transaksi; jika penautan gagal, server mencoba menghapus akun Auth baru. Pesan kegagalan pembersihan memerlukan pemeriksaan Supabase Auth oleh pengelola. Password tidak disimpan di profil atau audit.
 
 Pembuatan akun tidak memberi akses admin. Halaman login web saat ini tetap khusus admin; antarmuka login/dashboard guru dan siswa belum termasuk fase ini. Pengujian database menggunakan fixture lokal; uji Auth end-to-end membutuhkan konfigurasi server dan akun uji privat.
+
+## Hapus guru permanen
+
+Migrasi `202611180008_delete_teacher.sql` menyediakan RPC admin-only dengan pratinjau jumlah penugasan, absensi, nilai, materi, dan jurnal. Ikon Hapus pada Guru membuka konfirmasi; admin wajib mengetik nama persis dan mencentang persetujuan. Semua penugasan guru (termasuk semester lama) beserta catatan tersebut dihapus dalam satu transaksi, kemudian profil dan keanggotaan teacher sekolah itu dihapus. Perubahan jumlah data sejak pratinjau membatalkan penghapusan sampai konfirmasi diperbarui. Tidak ada hak edit nilai umum yang ditambahkan.
+
+Akun Supabase Auth **tidak dihapus**, termasuk jika hanya digunakan sebagai guru. Peran admin/siswa, keanggotaan sekolah lain, data master siswa/kelas/mapel, enrollment, serta audit tetap disimpan. Email login tetap terdaftar dan tidak dapat dipakai untuk membuat akun baru melalui Buat Akun; penautan kembali akun lama belum tersedia di UI. Penghapusan profil tidak sama dengan penghapusan identitas Auth. Operasi tercatat sebagai `teacher_permanent_delete`. Cadangkan data penting sebelum mengonfirmasi; tindakan ini tidak menyediakan undo.
+
+Pengujian otomatis memverifikasi izin, isolasi sekolah, pratinjau tanpa penghapusan, konfirmasi salah, pembersihan relasi, serta preservasi akun/peran lain dan audit. Uji interaksi browser dengan akun privat belum dilakukan. Migrasi hanya memasang fungsi, tidak menghapus data guru yang ada.
