@@ -1,0 +1,4 @@
+# Copy to local.properties (ignored by Git). Android Studio sets sdk.dir.
+SUPABASE_URL=https://uyhmglukvzimucfmthhk.supabase.co
+# Publishable key only: sb_publishable_... . Never use a secret/service_role key.
+SUPABASE_PUBLISHABLE_KEY=
