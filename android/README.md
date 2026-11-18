@@ -35,3 +35,23 @@ Repo belum menyertakan binary Gradle wrapper. Workflow `.github/workflows/androi
 8. Periksa penyimpanan aplikasi: tidak ada token plaintext; backup aplikasi tidak memuat sesi.
 
 Unit test repository menggunakan transport/vault palsu, bukan akun nyata. Enkripsi Keystore, lifecycle, keyboard, dan UI memerlukan pengujian emulator/perangkat. Workspace Arena saat pembuatan tidak memiliki Java/Gradle/SDK dan jaringan Google Maven/Gradle dibatasi; build Android lokal belum dapat dijalankan. Status workflow GitHub Actions dilaporkan terpisah, jangan menganggap APK sudah lulus build sebelum CI berhasil.
+
+## Build APK melalui GitHub Actions
+
+Build debug dan unit test pada commit `13ec557` berhasil di run `44225222698`. Artifact saat itu tidak dikonfigurasi untuk login. Pengujian perangkat nyata tetap diperlukan.
+
+Workflow sekarang menyediakan build manual opsional dengan konfigurasi. Setelah workflow tersedia di branch default (PR digabungkan):
+
+1. Buka GitHub repository → **Settings → Secrets and variables → Actions → Variables**.
+2. Tambahkan `RUANGAJAR_SUPABASE_URL` dan `RUANGAJAR_SUPABASE_PUBLISHABLE_KEY` untuk proyek RuangAjar yang sama. Gunakan key berawalan `sb_publishable_` saja. Jangan pernah menambahkan service-role/secret key sebagai nilai variabel ini. Publishable key bukan rahasia dan akan berada dalam APK; RLS tetap wajib.
+3. Buka **Actions → Android Guru → Run workflow**, pilih branch yang dimaksud, centang **Build APK login dengan Repository Variables RuangAjar**.
+4. Setelah berhasil, unduh artifact **ruangajar-guru-debug-configured**, ekstrak ZIP lalu instal APK pada HP uji. Tanpa centang, artifact tetap **ruangajar-guru-debug-unconfigured**. Build PR otomatis selalu tanpa konfigurasi.
+5. Ini APK debug, bukan distribusi Play Store. Artifact disimpan tujuh hari. Jangan bagikan APK debug ke publik sebelum uji akses dan sesi selesai.
+
+## Preview portrait di Arena
+
+`preview/android/index.html` merupakan simulasi web visual berdasarkan layout Compose fitur 1, **bukan emulator dan bukan APK asli**. Jalankan dari root repo:
+
+`python3 -m http.server 3001 --bind 0.0.0.0 --directory preview/android`
+
+Preview memiliki ukuran dasar 390×844 dan diskalakan agar muat. Pilih login, sukses, akses ditolak, offline, belum dikonfigurasi, atau loading. Ikon mata dan logout dapat disimulasikan. Kolom kredensial contoh readonly; CSP memblokir koneksi jaringan dan submit form. Tidak ada autentikasi sungguhan, storage sesi, atau panggilan Supabase. Tampilan font, keyboard, lifecycle, dan Material 3 asli tetap harus diuji lewat APK/emulator.

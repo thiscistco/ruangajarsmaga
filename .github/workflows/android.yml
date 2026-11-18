@@ -3,6 +3,11 @@ on:
   pull_request:
     paths: ['android/**', '.github/workflows/android.yml']
   workflow_dispatch:
+    inputs:
+      configured:
+        description: 'Build APK login dengan Repository Variables RuangAjar'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -20,13 +25,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Unit tests and debug APK (no production credentials)
+      - name: Unit tests and debug APK
         working-directory: android
+        env:
+          CONFIGURED_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.configured }}
+          ORG_GRADLE_PROJECT_SUPABASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.configured && vars.RUANGAJAR_SUPABASE_URL || '' }}
+          ORG_GRADLE_PROJECT_SUPABASE_PUBLISHABLE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.configured && vars.RUANGAJAR_SUPABASE_PUBLISHABLE_KEY || '' }}
         run: |
+          if [ "$CONFIGURED_BUILD" = "true" ]; then
+            if [ -z "$ORG_GRADLE_PROJECT_SUPABASE_URL" ] || [[ "$ORG_GRADLE_PROJECT_SUPABASE_PUBLISHABLE_KEY" != sb_publishable_* ]]; then
+              echo '::error::Isi Repository Variables RUANGAJAR_SUPABASE_URL dan RUANGAJAR_SUPABASE_PUBLISHABLE_KEY (sb_publishable_ saja).'
+              exit 1
+            fi
+            if [[ "$ORG_GRADLE_PROJECT_SUPABASE_URL" != https://* ]]; then
+              echo '::error::URL Supabase harus menggunakan HTTPS.'
+              exit 1
+            fi
+          fi
           gradle --no-daemon testDebugUnitTest assembleDebug > /tmp/android-build.log 2>&1 || { echo "::error::$(tail -n 35 /tmp/android-build.log | tr '\n' ' ')"; exit 1; }
           tail -n 15 /tmp/android-build.log
       - uses: actions/upload-artifact@v4
         with:
-          name: ruangajar-guru-debug-unconfigured
+          name: ${{ github.event_name == 'workflow_dispatch' && inputs.configured && 'ruangajar-guru-debug-configured' || 'ruangajar-guru-debug-unconfigured' }}
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
