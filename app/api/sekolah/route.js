@@ -2,6 +2,7 @@ import {NextResponse as R} from 'next/server';
 import {cookies,headers} from 'next/headers';
 import {createServerClient} from '@supabase/ssr';
 import {createClient} from '@supabase/supabase-js';
+import * as XLSX from 'xlsx';
 export const dynamic='force-dynamic';
 const json=(data,status=200)=>R.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 const err=(error,status=400)=>json({error},status);
@@ -74,6 +75,27 @@ export async function POST(req){
   const {error}=await db.rpc('save_school_settings',{s,school_name:body.nama,year_label:body.tahun,semester_label:body.semester});
   if(error)return err(error.code==='42501'?'Akses ditolak.':error.code==='22023'?'Periksa nama, tahun ajaran berurutan (YYYY/YYYY), dan semester.':'Pengaturan belum dapat disimpan.',error.code==='42501'?403:400);
   try{return json({data:await read(db,s)});}catch{return err('Pengaturan tersimpan, tetapi data belum bisa dimuat ulang.',503)}
+ }
+ if(action==='import'){
+  const kinds={guru:['import_teachers',['nama','email']],siswa:['import_students',['nama','nis','kelas']],kelas:['import_classes',['nama','tingkat']],mapel:['import_subjects',['nama']],penugasan:['import_assignments',['guru','kelas','mapel']]};
+  const spec=kinds[body.type];
+  if(!spec||typeof body.file!=='string'||!body.file.length||body.file.length>15_000_000)return err('File impor tidak valid.');
+  let parsed;
+  try{
+   const wb=XLSX.read(Buffer.from(body.file,'base64'),{type:'buffer'});
+   const ws=wb.Sheets[wb.SheetNames[0]];
+   if(!ws)return err('Sheet pertama tidak ditemukan.');
+   const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+   if(raw.length<2)return err('File kosong atau tidak memiliki baris data.');
+   const headers=raw[0].map(h=>String(h).trim().toLowerCase());
+   const idx=spec[1].map(f=>headers.indexOf(f));
+   if(idx.some(i=>i<0))return err(`Kolom wajib: ${spec[1].join(', ')}.`);
+   parsed=raw.slice(1).filter(r=>r.some(v=>String(v).trim()!=='')).map(r=>Object.fromEntries(spec[1].map((f,i)=>[f,String(r[idx[i]]??'').trim()])));
+  }catch(e){if(e.message&&/Kolom|File|Sheet/.test(e.message))throw e;return err('File Excel tidak dapat dibaca.')}
+  if(!parsed.length)return err('Tidak ada baris data untuk diimpor.');
+  const {data:summary,error}=await db.rpc(spec[0],{s,rows:parsed});
+  if(error)return err(error.code==='42501'?'Akses ditolak.':error.message||'Impor gagal.',error.code==='42501'?403:400);
+  try{return json({data:await read(db,s),summary});}catch{return err('Impor tersimpan, tetapi data belum bisa dimuat ulang.',503)}
  }
  const routes={preview:['audit_teacher_preview',{s,t:id}],correct:['correct_attendance',{s,a:id,new_status:body.status,reason:body.alasan}],publish:['publish_material',{s,m:id}]};
  if(!Object.hasOwn(routes,action))return err('Pengelolaan data sekolah masuk Tahap 2.',409);
