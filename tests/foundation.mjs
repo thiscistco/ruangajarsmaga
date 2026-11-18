@@ -52,6 +52,17 @@ try{
  assert.equal((await rows(`select id from assignments where teacher_id=${q(11)}`)).length,2);
  await sql(`select save_school_settings(${q(10)},'A baru','2026/2027','genap')`);
  await assert.rejects(sql(`select add_teacher_assignment(${q(10)},${q(11)},${q(25)},${q(16)})`),{code:'22023'});
+ await sql('reset role');
+ await sql(await readFile(new URL('../supabase/migrations/202611180005_manage_catalog.sql',import.meta.url),'utf8'));
+ await as(2); await assert.rejects(sql(`select manage_school_record(${q(10)},'kelas',${q(15)},'delete')`),{code:'42501'});
+ await as(1); await assert.rejects(sql(`select manage_school_record(${q(10)},'penugasan',${q(17)},'delete')`),{code:'23503'});
+ await assert.rejects(sql(`select manage_school_record(${q(10)},'siswa',${q(13)},'delete')`),{code:'23503'});
+ await sql(`select manage_school_record(${q(10)},'siswa',${q(13)},'edit','{"nama":"Nama Baru","nis":"2"}');`);
+ assert.deepEqual(await rows(`select name,nis from students`),[{name:'Nama Baru',nis:'2'}]);
+ await sql(`select manage_school_record(${q(10)},'kelas',(select id from classes where name='XI-3'),'delete');`);
+ assert.equal((await rows(`select id from classes where name='XI-3'`)).length,0);
+ assert.equal((await rows(`select id from audit_log where action like 'catalog_%' and actor_id=auth.uid()`)).length,2);
+ console.log('Lulus: edit, hapus, audit dan proteksi relasi.');
  console.log('Lulus: katalog, penugasan ganda, duplikat dan semester aktif.');
  console.log('Lulus: pengaturan, validasi tahun ajaran, pergantian dan riwayat semester, audit dan isolasi admin.');
  console.log('Lulus: migrasi, isolasi sekolah, akses anonim, multi-peran, akses guru/siswa, publikasi, koreksi, dan audit.');
