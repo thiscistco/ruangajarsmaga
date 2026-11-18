@@ -29,3 +29,11 @@ Migrasi `202611180008_delete_teacher.sql` menyediakan RPC admin-only dengan prat
 Akun Supabase Auth **tidak dihapus**, termasuk jika hanya digunakan sebagai guru. Peran admin/siswa, keanggotaan sekolah lain, data master siswa/kelas/mapel, enrollment, serta audit tetap disimpan. Email login tetap terdaftar dan tidak dapat dipakai untuk membuat akun baru melalui Buat Akun; penautan kembali akun lama belum tersedia di UI. Penghapusan profil tidak sama dengan penghapusan identitas Auth. Operasi tercatat sebagai `teacher_permanent_delete`. Cadangkan data penting sebelum mengonfirmasi; tindakan ini tidak menyediakan undo.
 
 Pengujian otomatis memverifikasi izin, isolasi sekolah, pratinjau tanpa penghapusan, konfirmasi salah, pembersihan relasi, serta preservasi akun/peran lain dan audit. Uji interaksi browser dengan akun privat belum dilakukan. Migrasi hanya memasang fungsi, tidak menghapus data guru yang ada.
+
+## Tambah guru/siswa sekaligus akun
+
+Migrasi `202611180009_add_profile_account.sql` menambahkan transaksi service-role-only untuk profil, keanggotaan aktif, enrollment siswa, dan audit. **Tambah Guru** meminta nama, email login (juga email profil), dan password. **Tambah Siswa** meminta nama, email login, password, NIS, serta kelas semester aktif; tombol simpan dinonaktifkan bila tidak tersedia kelas aktif. Password tetap memiliki ikon lihat/sembunyikan dan validasi 8–128 karakter.
+
+Server membuat akun Auth terlebih dahulu, kemudian memanggil RPC dengan identitas admin yang sudah diverifikasi. Jika transaksi database gagal, server mencoba menghapus hanya akun Auth baru itu; bila pembersihan gagal, pesan meminta pengelola memeriksa Auth. Akun lama/email yang sudah terdaftar tidak diambil alih. Password tidak masuk profil, audit, atau respons API. Gangguan jaringan/server antara Auth dan transaksi masih dapat memerlukan pemeriksaan manual; keduanya bukan satu transaksi lintas layanan.
+
+Impor Excel tetap membuat profil saja. **Buat Akun** masih tersedia pada profil lama/hasil impor tanpa akun. Tidak ada pembuatan akun otomatis untuk data lama, perubahan akun admin, atau perubahan halaman login guru/siswa pada fitur ini. Pengujian database dan build dijalankan; uji browser/Auth end-to-end dengan akun privat belum dilakukan.
