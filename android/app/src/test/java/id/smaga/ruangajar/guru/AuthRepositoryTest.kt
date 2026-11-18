@@ -13,21 +13,22 @@ class AuthRepositoryTest {
         override fun clear() { token = null }
     }
     private fun tokens(refresh: String = "refresh-new") = Reply(200, """{"access_token":"access","refresh_token":"$refresh"}""")
-    private fun api(vault: Vault, active: Boolean = true, profile: Boolean = true, failCheck: Boolean = false) = Transport { _, path, bearer, body ->
+    private fun api(vault: Vault, active: Boolean = true, profile: Boolean = true, failCheck: Boolean = false, roles: List<String> = listOf("teacher"), email: String = "NIP@ruangajar.id") = Transport { _, path, bearer, body ->
         when {
             path.startsWith("/auth/v1/token") -> tokens()
             path == "/auth/v1/user" -> {
                 assertEquals("refresh-new", vault.token) // rotation saved before verification
                 if (failCheck) throw IOException("private transport diagnostic")
                 assertEquals("access", bearer)
-                Reply(200, """{"id":"$uid","email":"teacher@example.test"}""")
+                Reply(200, """{"id":"$uid","email":"$email"}""")
             }
             path.startsWith("/rest/v1/memberships") -> {
                 assertTrue(path.contains("user_id=eq.$uid"))
-                assertTrue(path.contains("role=eq.teacher&active=eq.true"))
-                Reply(200, if (active) """[{"school_id":"school"}]""" else "[]")
+                assertTrue(path.contains("role=in.(teacher,student)&active=eq.true"))
+                Reply(200, if (active) roles.joinToString(prefix = "[", postfix = "]") { """{"school_id":"school","role":"$it","active":true}""" } else "[]")
             }
             path.startsWith("/rest/v1/teachers") -> Reply(200, if (profile) """[{"school_id":"school","name":"Guru Uji"},{"school_id":"other","name":"Not allowed"}]""" else "[]")
+            path.startsWith("/rest/v1/students") -> Reply(200, if (profile) """[{"school_id":"school","name":"Siswa Uji"},{"school_id":"other","name":"Not allowed"}]""" else "[]")
             path.startsWith("/auth/v1/logout") -> { assertNull(vault.token); assertNull(body); Reply(204, "") }
             else -> error("Unexpected request")
         }
@@ -35,8 +36,8 @@ class AuthRepositoryTest {
     @Test fun loginRequiresActiveTeacherAndMatchingProfile() {
         val vault = Vault()
         val result = AuthRepository(api(vault), vault).login("teacher@example.test", "test-password")
-        assertEquals(1, result.teachers.size)
-        assertEquals("Guru Uji", result.teachers.single().name)
+        assertEquals(1, result.profiles.size)
+        assertEquals("Guru Uji", result.profiles.single().name)
         assertEquals("refresh-new", vault.token)
     }
     @Test fun inactiveOrNonTeacherAccountIsRejectedAndCleared() {
@@ -92,6 +93,44 @@ class AuthRepositoryTest {
         }, vault)
         repo.login("teacher@example.test", "test-password")
         assertFalse(repo.logout()); assertNull(vault.token)
+    }
+    @Test fun studentDestinationComesFromMembershipNotEmail() {
+        val vault = Vault()
+        // Even a teacher-shaped address cannot grant teacher access.
+        val session = AuthRepository(api(vault, roles = listOf("student"), email = "NIP@ruangajar.id"), vault)
+            .login("NIP@ruangajar.id", "test-password")
+        assertEquals(listOf("student"), session.roles)
+        assertEquals("student", session.preferredRole(null))
+        assertEquals("Siswa Uji", session.profiles.single().name)
+    }
+    @Test fun adminOnlyIsRejectedButAdminWithTeacherIsAllowed() {
+        val deniedVault = Vault()
+        try { AuthRepository(api(deniedVault, roles = listOf("admin")), deniedVault).login("NIP@ruangajar.id", "test-password"); fail() }
+        catch (e: AuthProblem) { assertTrue(e.invalidSession) }
+        assertNull(deniedVault.token)
+        val vault = Vault()
+        val session = AuthRepository(api(vault, roles = listOf("admin", "teacher")), vault).login("NIP@ruangajar.id", "test-password")
+        assertEquals(listOf("teacher"), session.roles)
+    }
+    @Test fun bothRolesRequireExplicitChoiceAndCannotSelectAdmin() {
+        val vault = Vault()
+        val session = AuthRepository(api(vault, roles = listOf("teacher", "student")), vault).login("NIP@ruangajar.id", "test-password")
+        assertEquals(2, session.profiles.size)
+        assertNull(session.preferredRole(null))
+        assertNull(session.preferredRole("admin"))
+        assertEquals("student", session.preferredRole("student"))
+    }
+    @Test fun missingStudentProfileIsRejected() {
+        val vault = Vault()
+        try { AuthRepository(api(vault, profile = false, roles = listOf("student")), vault).login("NISN@ruangajar.id", "test-password"); fail() }
+        catch (e: AuthProblem) { assertTrue(e.invalidSession) }
+        assertNull(vault.token)
+    }
+    @Test fun studentSessionCanBeRestoredAndLoggedOut() {
+        val vault = Vault().apply { token = "old-refresh" }
+        val repo = AuthRepository(api(vault, roles = listOf("student")), vault)
+        assertEquals(listOf("student"), repo.restore().roles)
+        assertTrue(repo.logout()); assertNull(vault.token)
     }
     @Test fun rejectsSecretKeysAndCleartextUrls() {
         for ((url, key) in listOf("http://example.test" to "sb_publishable_test", "https://example.test" to "sb_secret_do_not_use", "https://example.test" to "service-role")) {

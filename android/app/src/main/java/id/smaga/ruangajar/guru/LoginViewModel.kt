@@ -14,7 +14,8 @@ data class LoginUi(
     val busy: Boolean = false,
     val configured: Boolean = true,
     val savedSession: Boolean = false,
-    val session: TeacherSession? = null,
+    val session: LearningSession? = null,
+    val selectedRole: String? = null,
     val message: String = ""
 )
 
@@ -46,12 +47,20 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun authenticate(work: () -> TeacherSession) {
+    fun selectRole(role: String) {
+        val current = mutable.value
+        if (!current.busy && role in (current.session?.roles ?: emptyList())) {
+            mutable.value = current.copy(selectedRole = role)
+        }
+    }
+
+    private fun authenticate(work: () -> LearningSession) {
+        val previousRole = mutable.value.selectedRole
         mutable.value = mutable.value.copy(busy = true, session = null, message = "")
         viewModelScope.launch {
             try {
                 val session = withContext(Dispatchers.IO) { work() }
-                mutable.value = LoginUi(session = session, savedSession = true)
+                mutable.value = LoginUi(session = session, savedSession = true, selectedRole = session.preferredRole(previousRole))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 val saved = withContext(Dispatchers.IO) { runCatching { repository?.hasSavedSession() == true }.getOrDefault(false) }

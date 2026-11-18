@@ -1,13 +1,13 @@
-# RuangAjar Guru — Native Android, fitur 1
+# RuangAjar Guru & Siswa — Native Android, fitur 1
 
 Kotlin + Jetpack Compose (bukan WebView). Modul Android berada dalam repository RuangAjar yang sama. Aplikasi memakai Supabase proyek yang sudah ada; tidak membuat backend baru. Fitur 2–7 dan pengaturan profil web belum termasuk.
 
 ## Cakupan
 
 - Login email/password dari admin, toggle lihat/sembunyikan password, pesan kesalahan tanpa respons mentah server.
-- Verifikasi `/auth/v1/user`, membership `teacher` aktif, dan profil guru yang tertaut. Admin yang juga teacher boleh masuk; admin saja/siswa/nonaktif ditolak. Profil beberapa sekolah didukung untuk identifikasi, belum ada pemilihan penugasan.
+- Verifikasi `/auth/v1/user`, membership `teacher`/`student` aktif dan profil sesuai peran yang tertaut di sekolah yang sama. Guru dan siswa boleh masuk; admin yang juga teacher/student boleh masuk; admin saja atau membership nonaktif ditolak. Profil beberapa sekolah didukung untuk identifikasi, belum ada pemilihan penugasan.
 - Refresh token dienkripsi AES-GCM menggunakan Android Keystore; access token hanya di memori. Password tidak disimpan ke disk/saved state. Backup dan trafik HTTP non-TLS dimatikan; screenshot/recents dibatasi dengan FLAG_SECURE.
-- Pemulihan sesi dengan refresh-token rotation saat startup/kembali ke foreground dan pemeriksaan ulang setelah lima menit layar aktif. Token hasil rotasi disimpan sebelum verifikasi role. Gagal jaringan tidak menampilkan data guru dan menawarkan retry tanpa membuang refresh token.
+- Pemulihan sesi dengan refresh-token rotation saat startup/kembali ke foreground dan pemeriksaan ulang setelah lima menit layar aktif. Token hasil rotasi disimpan sebelum verifikasi role. Gagal jaringan tidak menampilkan data akun dan menawarkan retry tanpa membuang refresh token.
 - Logout menghapus sesi lokal dahulu lalu mencoba revoke `scope=local`. Jika server tidak terjangkau, pesan menyatakan pencabutan server belum terkonfirmasi. Logout tidak memengaruhi sesi admin di perangkat lain.
 - Otorisasi sebenarnya tetap RLS Supabase, bukan UI atau metadata yang bisa diubah pengguna. Jangan pernah mengemas service-role/secret key di APK. Semua akses data tahap berikutnya juga wajib memakai JWT pengguna dan memeriksa sesi/izin server.
 
@@ -25,8 +25,8 @@ Repo belum menyertakan binary Gradle wrapper. Workflow `.github/workflows/androi
 
 ## Uji penerimaan privat (belum dijalankan di perangkat)
 
-1. Login guru aktif: nama/email tampil, tanpa akses admin.
-2. Akun admin+teacher boleh masuk; akun admin saja/siswa/guru nonaktif tidak boleh masuk.
+1. Login guru aktif menuju Ruang Guru; siswa aktif menuju Ruang Siswa. Nama/email tampil, tanpa akses admin.
+2. Akun admin+teacher dan siswa aktif boleh masuk; akun admin saja/guru atau siswa nonaktif tidak boleh masuk.
 3. Password salah/email belum terdaftar: pesan generik; tidak menampilkan payload/token.
 4. Tutup/buka aplikasi dan putar layar: sesi pulih; password tidak disimpan.
 5. Matikan jaringan: retry tersedia; data tidak ditampilkan sebelum verifikasi. Nyalakan lagi dan coba ulang.
@@ -55,3 +55,14 @@ Workflow sekarang menyediakan build manual opsional dengan konfigurasi. Setelah 
 `python3 -m http.server 3001 --bind 0.0.0.0 --directory preview/android`
 
 Preview memiliki ukuran dasar 390×844 dan diskalakan agar muat. Pilih login, sukses, akses ditolak, offline, belum dikonfigurasi, atau loading. Ikon mata dan logout dapat disimulasikan. Kolom kredensial contoh readonly; CSP memblokir koneksi jaringan dan submit form. Tidak ada autentikasi sungguhan, storage sesi, atau panggilan Supabase. Tampilan font, keyboard, lifecycle, dan Material 3 asli tetap harus diuji lewat APK/emulator.
+
+
+## Pembaruan login guru dan siswa
+
+Nama tampilan aplikasi menjadi **RuangAjar**. Package/applicationId `id.smaga.ruangajar.guru`, alias Keystore, nama artifact dan nama workflow lama sengaja dipertahankan agar instalasi/sesi yang ada tetap kompatibel, bukan membuat aplikasi kedua.
+
+Kolom email memakai ikon amplop dan placeholder `NIP@ruangajar.id`; password memakai ikon gembok dan tombol mata. Label teks visual dihilangkan tetapi semantics Email login/Password tetap tersedia untuk TalkBack. Petunjuk: guru `NIP@ruangajar.id`, siswa `NISN@ruangajar.id` (ganti NIP/NISN dengan identitas masing-masing saat admin membuat akun). Alamat email lama tetap bisa login: format domain/panjang nomor tidak dipakai sebagai aturan pemberian role dan akun lama tidak diubah otomatis. Tidak ada verifikasi kepemilikan NIP/NISN baru di tahap ini.
+
+Tujuan login berasal dari membership aktif + profil yang cocok berdasarkan school_id dan user_id. Metadata role/email tidak dipercaya untuk otorisasi. Satu role langsung membuka halaman sambutan role tersebut; akun dua role memilih Guru/Siswa dan boleh beralih hanya di antara role terverifikasi. Saat refresh, pilihan dipertahankan bila masih valid. Ini masih fitur 1: dashboard kelas/tugas/ujian siswa belum dibuat. Tidak perlu migrasi; RLS own_student dan own_teacher sudah tersedia.
+
+Preview portrait menampilkan skenario login guru, login siswa, Ruang Guru, Ruang Siswa, serta akun dua peran. Tetap simulasi dengan kredensial readonly; tidak membuktikan login perangkat nyata. Tes Android diperluas untuk siswa, email yang tidak sesuai role, admin-only, admin+teacher, profil siswa hilang, dua role, dan restore/logout siswa. Tambahkan pemeriksaan TalkBack dan pemilihan role di checklist uji perangkat.

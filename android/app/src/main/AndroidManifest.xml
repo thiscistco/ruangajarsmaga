@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="RuangAjar Guru" android:theme="@style/AppTheme"
+    <application android:label="RuangAjar" android:theme="@style/AppTheme"
         android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

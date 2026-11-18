@@ -10,6 +10,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -22,6 +24,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -67,7 +71,7 @@ private fun LoginScreen(model: LoginViewModel = viewModel()) {
         .padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(40.dp))
         Text("RuangAjar", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-        Text("PORTAL GURU", style = MaterialTheme.typography.labelLarge)
+        Text("GURU & SISWA", style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(28.dp))
         Card(Modifier.widthIn(max = 480.dp).fillMaxWidth()) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -78,31 +82,52 @@ private fun LoginScreen(model: LoginViewModel = viewModel()) {
                     }
                     state.busy -> {
                         CircularProgressIndicator()
-                        Text("Memeriksa akun dan akses guru…")
+                        Text("Memeriksa akun dan akses akun…")
                     }
                     state.session != null -> {
                         val session = state.session!!
-                        Text("Login berhasil", style = MaterialTheme.typography.titleLarge)
-                        Text("Selamat datang, ${session.teachers.first().name}.")
-                        Text(session.email)
-                        Text("Akses guru aktif: ${session.teachers.size} sekolah.")
-                        Text("Fitur 1 selesai: login dan sesi guru. Daftar penugasan dan pembelajaran akan tersedia pada tahap berikutnya.")
+                        val role = state.selectedRole
+                        if (role == null) {
+                            Text("Pilih tampilan", style = MaterialTheme.typography.titleLarge)
+                            Text("Akun ini memiliki lebih dari satu peran aktif.")
+                            session.roles.forEach { available ->
+                                Button(onClick = { model.selectRole(available) }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (available == "teacher") "Masuk sebagai Guru" else "Masuk sebagai Siswa")
+                                }
+                            }
+                        } else {
+                            val profiles = session.profiles.filter { it.role == role }
+                            val label = if (role == "teacher") "Guru" else "Siswa"
+                            Text("Ruang $label", style = MaterialTheme.typography.titleLarge)
+                            Text("Selamat datang, ${profiles.first().name}.")
+                            Text(session.email)
+                            Text("Akses ${label.lowercase()} aktif: ${profiles.size} sekolah.")
+                            Text(if (role == "teacher") "Login guru berhasil. Penugasan dan pembelajaran tersedia pada tahap berikutnya."
+                                else "Login siswa berhasil. Kelas, materi, tugas, dan ujian tersedia pada tahap berikutnya.")
+                            if (session.roles.size > 1) session.roles.filter { it != role }.forEach { other ->
+                                TextButton(onClick = { model.selectRole(other) }) { Text(if (other == "teacher") "Beralih ke Guru" else "Beralih ke Siswa") }
+                            }
+                        }
                         OutlinedButton(onClick = { confirmLogout = true }, modifier = Modifier.fillMaxWidth()) { Text("Keluar") }
                     }
                     state.savedSession -> {
                         Text("Periksa sesi tersimpan", style = MaterialTheme.typography.titleLarge)
-                        Text("Akses guru belum dapat diverifikasi. Data pembelajaran tidak ditampilkan sebelum verifikasi berhasil.")
+                        Text("Akses akun belum dapat diverifikasi. Data pembelajaran tidak ditampilkan sebelum verifikasi berhasil.")
                         Button(onClick = model::resume, modifier = Modifier.fillMaxWidth()) { Text("Coba lagi") }
                         TextButton(onClick = { confirmLogout = true }) { Text("Hapus sesi dan masuk ulang") }
                     }
                     else -> {
-                        Text("Masuk sebagai guru", style = MaterialTheme.typography.titleLarge)
+                        Text("Masuk ke RuangAjar", style = MaterialTheme.typography.titleLarge)
                         Text("Gunakan akun yang dibuat admin sekolah. Tidak ada pendaftaran mandiri.")
-                        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        OutlinedTextField(value = email, onValueChange = { email = it },
+                            placeholder = { Text("NIP@ruangajar.id") },
+                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Email login" }, singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next))
-                        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        Text("Guru: NIP@ruangajar.id\nSiswa: NISN@ruangajar.id", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(value = password, onValueChange = { password = it },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Password" }, singleLine = true,
                             visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { model.login(email, password); password = ""; visible = false }),
@@ -119,7 +144,7 @@ private fun LoginScreen(model: LoginViewModel = viewModel()) {
             }
         }
         Spacer(Modifier.height(20.dp))
-        Text("RuangAjar • Aplikasi Guru", style = MaterialTheme.typography.bodySmall)
+        Text("RuangAjar • Guru & Siswa", style = MaterialTheme.typography.bodySmall)
     }
     if (confirmLogout) AlertDialog(onDismissRequest = { confirmLogout = false },
         title = { Text("Keluar dari akun?") }, text = { Text("Sesi tersimpan di perangkat ini akan dihapus.") },

@@ -10,8 +10,11 @@ interface TokenVault { fun read(): String?; fun save(refreshToken: String); fun 
 data class Reply(val code: Int, val body: String)
 fun interface Transport { fun request(method: String, path: String, bearer: String?, body: JSONObject?): Reply }
 class AuthProblem(val userMessage: String, val invalidSession: Boolean = false) : Exception(userMessage)
-data class TeacherIdentity(val schoolId: String, val name: String)
-data class TeacherSession(val email: String, val teachers: List<TeacherIdentity>)
+data class AccountProfile(val schoolId: String, val name: String, val role: String)
+data class LearningSession(val email: String, val profiles: List<AccountProfile>) {
+    val roles: List<String> get() = profiles.map { it.role }.distinct().sorted()
+    fun preferredRole(previous: String?): String? = previous?.takeIf { it in roles } ?: roles.singleOrNull()
+}
 
 class SupabaseTransport(baseUrl: String, private val key: String) : Transport {
     private val base = baseUrl.trimEnd('/')
@@ -47,7 +50,7 @@ class AuthRepository(private val api: Transport, private val vault: TokenVault) 
     private var accessToken: String? = null
     fun hasSavedSession() = vault.read() != null
 
-    fun login(email: String, password: String): TeacherSession {
+    fun login(email: String, password: String): LearningSession {
         val response = api.request("POST", "/auth/v1/token?grant_type=password", null,
             JSONObject().put("email", email.trim()).put("password", password))
         if (response.code !in 200..299) throw AuthProblem(
@@ -57,7 +60,7 @@ class AuthRepository(private val api: Transport, private val vault: TokenVault) 
         return accept(response)
     }
 
-    fun restore(): TeacherSession {
+    fun restore(): LearningSession {
         val refresh = vault.read() ?: throw AuthProblem("Silakan masuk kembali.", true)
         val response = api.request("POST", "/auth/v1/token?grant_type=refresh_token", null,
             JSONObject().put("refresh_token", refresh))
@@ -69,7 +72,7 @@ class AuthRepository(private val api: Transport, private val vault: TokenVault) 
         return accept(response)
     }
 
-    private fun accept(response: Reply): TeacherSession {
+    private fun accept(response: Reply): LearningSession {
         val tokens = JSONObject(response.body)
         val access = tokens.getString("access_token")
         val refresh = tokens.getString("refresh_token")
@@ -77,7 +80,7 @@ class AuthRepository(private val api: Transport, private val vault: TokenVault) 
         accessToken = access
         // Persist rotated refresh token before any network authorization checks.
         vault.save(refresh)
-        try { return verifyTeacher(access) }
+        try { return verifyAccess(access) }
         catch (e: AuthProblem) {
             if (e.invalidSession) logout()
             throw e
@@ -86,25 +89,35 @@ class AuthRepository(private val api: Transport, private val vault: TokenVault) 
 
     private fun checked(path: String, access: String): String {
         val response = api.request("GET", path, access, null)
-        if (response.code in listOf(401, 403)) throw AuthProblem("Akses guru tidak tersedia. Silakan masuk kembali.", true)
+        if (response.code in listOf(401, 403)) throw AuthProblem("Akses pembelajaran tidak tersedia. Silakan masuk kembali.", true)
         if (response.code !in 200..299) throw AuthProblem("Data akses belum dapat diperiksa. Coba lagi.")
         return response.body
     }
 
-    private fun verifyTeacher(access: String): TeacherSession {
+    private fun verifyAccess(access: String): LearningSession {
         val user = JSONObject(checked("/auth/v1/user", access))
         val uid = user.getString("id")
         // Prevent arbitrary query construction from an invalid server response.
         java.util.UUID.fromString(uid)
-        val memberships = JSONArray(checked("/rest/v1/memberships?select=school_id&user_id=eq.$uid&role=eq.teacher&active=eq.true", access))
-        val schools = (0 until memberships.length()).map { memberships.getJSONObject(it).getString("school_id") }.toSet()
-        if (schools.isEmpty()) throw AuthProblem("Akun ini tidak memiliki akses guru aktif. Hubungi admin sekolah.", true)
-        val profiles = JSONArray(checked("/rest/v1/teachers?select=school_id,name&user_id=eq.$uid", access))
-        val teachers = (0 until profiles.length()).map { profiles.getJSONObject(it) }
-            .filter { it.getString("school_id") in schools }
-            .map { TeacherIdentity(it.getString("school_id"), it.getString("name")) }
-        if (teachers.isEmpty()) throw AuthProblem("Profil guru belum tertaut. Hubungi admin sekolah.", true)
-        return TeacherSession(user.optString("email"), teachers)
+        val memberships = JSONArray(checked("/rest/v1/memberships?select=school_id,role,active&user_id=eq.$uid&role=in.(teacher,student)&active=eq.true", access))
+        val allowed = (0 until memberships.length()).map { memberships.getJSONObject(it) }
+            .filter { it.optBoolean("active") && it.optString("role") in listOf("teacher", "student") }
+            .map { it.getString("school_id") to it.getString("role") }.toSet()
+        if (allowed.isEmpty()) throw AuthProblem("Akun ini tidak memiliki akses guru atau siswa aktif. Hubungi admin sekolah.", true)
+        val profiles = mutableListOf<AccountProfile>()
+        for ((role, table) in listOf("teacher" to "teachers", "student" to "students")) {
+            if (allowed.none { it.second == role }) continue
+            val records = JSONArray(checked("/rest/v1/$table?select=school_id,name&user_id=eq.$uid", access))
+            for (i in 0 until records.length()) {
+                val profile = records.getJSONObject(i)
+                val school = profile.getString("school_id")
+                if ((school to role) in allowed) profiles.add(AccountProfile(school, profile.getString("name"), role))
+            }
+        }
+        if (profiles.isEmpty()) throw AuthProblem("Profil guru/siswa belum tertaut. Hubungi admin sekolah.", true)
+        // Email is only an identifier; membership + linked profile determines the destination.
+        return LearningSession(user.optString("email"), profiles)
+
     }
 
     // Local logout always happens first. Remote failure is reported without restoring the token.
