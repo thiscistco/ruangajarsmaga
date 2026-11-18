@@ -8,7 +8,7 @@ const parsed=parseAccountWorkbook(encode([headers,row]));
 assert.equal(parsed[0].password,'  Password123  ');
 assert.equal(parsed[0].baris,2);
 assert.throws(()=>parseAccountWorkbook(encode([headers.slice(1),row])),/Kolom/);
-assert.throws(()=>parseAccountWorkbook(encode([headers,...Array(21).fill(row)])),/1–20/);
+assert.throws(()=>parseAccountWorkbook(encode([headers,...Array(501).fill(row)])),/1–500/);
 assert.throws(()=>parseAccountWorkbook('x'.repeat(1_400_001)),/1 MB/);
 function mock({preview='created',result='created',saveError=false,cleanupError=false,createError=false}={}){
  const calls={create:0,delete:0,rpc:0};
@@ -25,3 +25,8 @@ m=mock();result=await importAccounts(m.client,'school','actor',[...parsed,...par
 m=mock();result=await importAccounts(m.client,'school','actor',[{...parsed[0],role:'admin'}]);assert.equal(m.calls.create,0);assert.equal(result.errors.length,1);
 assert.ok(!JSON.stringify(result).includes(parsed[0].password));
 console.log('Lulus: parsing Excel akun, batas ukuran/baris, validasi role, duplikat, skip, link, cleanup, dan pesan tanpa password.');
+
+const full=parseAccountWorkbook(encode([headers,...Array.from({length:500},(_,i)=>['guru',`Teacher ${i}`,`t${i}@example.test`,'Password123',''])]));
+assert.equal(full.length,500);assert.equal(full.at(-1).baris,501);
+const duplicated=parseAccountWorkbook(encode([headers,...Array(11).fill(row)]));assert.equal(duplicated[10].duplicate,true);
+m=mock();result=await importAccounts(m.client,'school','actor',duplicated.slice(10));assert.equal(m.calls.create,0);assert.equal(result.errors.length,1);
