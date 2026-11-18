@@ -16,3 +16,13 @@ Login hanya menampilkan logo/nama, email/password berikon, ikon mata, Masuk dan 
 Selector di luar frame ponsel adalah kontrol reviewer, bukan bagian UI aplikasi. Semua kolom readonly dengan data contoh, CSP melarang koneksi jaringan dan pengiriman form. Tema tidak dipersistenkan. Login, role, offline, dan logout semuanya simulasi. Tidak ada perubahan pada Kotlin, workflow APK, data Supabase atau otorisasi. Tema Android native menunggu pilihan pengguna.
 
 Validasi pada perubahan ini: sintaks JavaScript, HTTP 200, git diff check, serta simulasi DOM dengan linkedom untuk tiga tema, placeholder/label, password toggle, bantuan, seluruh state, dan logout. linkedom hanya dipasang sementara di cache dan tidak menambah dependensi aplikasi. Belum ada pengujian screenshot/browser atau emulator Android.
+
+## Pilihan background
+
+Background kini dapat dipilih terpisah dari tema (12 kombinasi):
+1. Soft Glow: dua gradasi radial emas di sudut. Default.
+2. Golden Flow: lengkungan SVG abstrak di bagian atas/bawah.
+3. Halo Lines: lingkaran tipis di sudut, pusat form tetap kosong.
+4. Polos: tanpa dekorasi sebagai pembanding.
+
+Semua dekorasi dibuat dengan CSS/SVG lokal, statis, aria-hidden dan pointer-events:none; tidak ada gambar eksternal, tracking, atau animasi background. Warna menyesuaikan tema terang/gelap. DOM test mencakup seluruh 12 kombinasi, status tombol terpilih, keterangan, ikon mata, bantuan, dan CSP. Belum dilakukan tes visual screenshot; penetapan desain APK menunggu pilihan pengguna.
