@@ -10,6 +10,10 @@ val local = Properties().apply {
 }
 fun config(name: String) = providers.gradleProperty(name).orNull ?: local.getProperty(name, "")
 fun quoted(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "").replace("\r", "") + "\""
+val publicKey = config("SUPABASE_PUBLISHABLE_KEY")
+require(publicKey.isEmpty() || publicKey.startsWith("sb_publishable_")) {
+    "Android accepts only sb_publishable_ keys. Never package secret or service-role credentials."
+}
 android {
     namespace = "id.smaga.ruangajar.guru"
     compileSdk = 35
@@ -20,7 +24,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "SUPABASE_URL", quoted(config("SUPABASE_URL")))
-        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quoted(config("SUPABASE_PUBLISHABLE_KEY")))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quoted(publicKey))
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

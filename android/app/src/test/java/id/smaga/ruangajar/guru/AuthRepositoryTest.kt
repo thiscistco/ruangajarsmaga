@@ -77,6 +77,22 @@ class AuthRepositoryTest {
         repo.login("teacher@example.test", "test-password")
         assertTrue(repo.logout()); assertNull(vault.token)
     }
+    @Test fun temporaryRefreshFailurePreservesStoredSession() {
+        val vault = Vault().apply { token = "keep-refresh" }
+        val repo = AuthRepository(Transport { _, _, _, _ -> Reply(503, "") }, vault)
+        try { repo.restore(); fail() } catch (e: AuthProblem) { assertFalse(e.invalidSession) }
+        assertEquals("keep-refresh", vault.token)
+    }
+    @Test fun offlineLogoutStillRemovesLocalSession() {
+        val vault = Vault()
+        val delegate = api(vault)
+        val repo = AuthRepository(Transport { method, path, token, body ->
+            if (path.contains("logout")) throw IOException("offline")
+            delegate.request(method, path, token, body)
+        }, vault)
+        repo.login("teacher@example.test", "test-password")
+        assertFalse(repo.logout()); assertNull(vault.token)
+    }
     @Test fun rejectsSecretKeysAndCleartextUrls() {
         for ((url, key) in listOf("http://example.test" to "sb_publishable_test", "https://example.test" to "sb_secret_do_not_use", "https://example.test" to "service-role")) {
             try { SupabaseTransport(url, key); fail() } catch (_: IllegalArgumentException) { }
