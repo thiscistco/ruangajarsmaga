@@ -14,7 +14,7 @@ Tombol **Light mode / Dark mode** mengubah warna halaman reviewer, layar ponsel,
 
 Semua kolom readonly dengan data contoh. CSP melarang koneksi jaringan dan pengiriman form; gambar hanya dari origin lokal. Tidak ada autentikasi nyata. Role, offline, bantuan, dan logout adalah simulasi. Label aksesibilitas tetap tersedia dan dekorasi diabaikan pembaca layar. Reset layar tidak mereset mode yang dipilih.
 
-Tidak ada perubahan pada Kotlin, workflow APK, data Supabase, atau otorisasi pada tahap ini. Pilihan tema/background A/B/C sebelumnya tersimpan dalam riwayat Git; preview utama sekarang fokus pada desain terpilih.
+Desain terpilih kini juga diterapkan ke Kotlin/Compose dalam PR yang sama. Asset native identik dengan asset preview; tata letak disesuaikan dengan ukuran layar dan keyboard Android. Tidak ada perubahan pada backend/otorisasi. Pilihan tema/background A/B/C sebelumnya tersimpan dalam riwayat Git; preview utama fokus pada desain terpilih. Preview web tetap simulasi, bukan bukti perilaku APK.
 
 ## Validasi
 
