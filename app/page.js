@@ -1,5 +1,6 @@
 'use client';
 import LoginPage from './LoginPage';
+import TeacherHome from './TeacherHome';
 import {useEffect,useId,useRef,useState} from 'react';
 import {runAccountBatches} from '../lib/import-batches.mjs';
 import {buildLearningReport,reportWorkbook} from '../lib/learning-export.mjs';
@@ -23,13 +24,13 @@ export default function Page(){
  useEffect(()=>{if(!busy||!importProgress)return;const warn=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn)},[busy,importProgress]);
  useEffect(()=>{try{Compact(localStorage.getItem('ruangajar.sidebar.compact')==='true')}catch{}},[]);
  const toggleSidebar=()=>Compact(v=>{try{localStorage.setItem('ruangajar.sidebar.compact',String(!v))}catch{}return !v});
- const [roles,Roles]=useState([]);
+ const [roles,Roles]=useState([]),[teacherMode,TeacherMode]=useState(false);
  const sessionToken=useRef(null);
  useEffect(()=>{fetch('/api/sekolah').then(r=>r.json()).then(x=>{if(x.error)throw Error(x.error);D(x.data);A(x.authenticated);Roles(x.roles||[]);C(x.configured);R(true)}).catch(()=>{T('Tidak dapat memuat sesi. Periksa koneksi lalu coba masuk kembali.');R(true)});},[]);
  const go=k=>{if(busy)return;P(k);F({});S(defaultSort(k));Q('');O(false);M(null);E('')};
  const show=(key,row)=>{if(busy&&importProgress)return;IP(null);E('');IF(null);IR(null);M({key,row})};
  const gate=(key,row)=>auth?show(key,row):show('login');
- async function run(body,{close=true,message='',next}={}){E('');T('');B(true);try{const r=await fetch('/api/sekolah',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,sessionToken:body.action==='login'?undefined:sessionToken.current||undefined})}),x=await r.json();if(!r.ok)throw Error(x.error);if(x.data)D(x.data);if('authenticated'in x){A(x.authenticated);Roles(x.roles||[]);if(!x.authenticated){sessionToken.current=null;D({});}else sessionToken.current=x.accessToken||null;}if(close)M(null);if(next)next(x);if(message){T(message);setTimeout(()=>T(''),3200)}}catch(e){if(modal||['login','logout','settings','assignment'].includes(body.action))E(e.message);else T(e.message)}finally{B(false)}}
+ async function run(body,{close=true,message='',next}={}){E('');T('');B(true);try{const r=await fetch('/api/sekolah',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,sessionToken:body.action==='login'?undefined:sessionToken.current||undefined})}),x=await r.json();if(!r.ok)throw Error(x.error);if(x.data)D(x.data);if('authenticated'in x){A(x.authenticated);Roles(x.roles||[]);if(!x.authenticated){TeacherMode(false);sessionToken.current=null;D({});}else sessionToken.current=x.accessToken||null;}if(close)M(null);if(next)next(x);if(message){T(message);setTimeout(()=>T(''),3200)}}catch(e){if(modal||['login','logout','settings','assignment'].includes(body.action))E(e.message);else T(e.message)}finally{B(false)}}
  async function runImport(){
   if(!importFile||busy)return;
   const accounts=['guru','siswa'].includes(page);
@@ -65,6 +66,7 @@ export default function Page(){
  const select=(name,label,items,value)=> <label>{label}<select name={name} required defaultValue={value||''}><option value="" disabled>Pilih {label.toLowerCase()}</option>{items.map(i=><option key={i}>{i}</option>)}</select></label>;
  const input=(name,label,type='text',value)=> <label>{label}<input name={name} type={type} defaultValue={value} required maxLength={120}/></label>;
  const list=k=>(data[k]||[]).map(r=>r.nama);
+ if(auth&&roles.includes('teacher')&&(!roles.includes('admin')||teacherMode))return <TeacherHome token={sessionToken.current} onLogout={()=>run({action:'logout'})} logoutBusy={busy} logoutError={error} onAdmin={roles.includes('admin')?()=>TeacherMode(false):undefined}/>;
  if(!auth||!roles.includes('admin'))return <LoginPage ready={ready} busy={busy} configured={configured} error={error||toast} roles={auth?roles:[]} onLogin={credentials=>run({action:'login',...credentials})} onLogout={()=>run({action:'logout'})}/>;
  return <div className={compact?'shell compact':'shell'}>
  {open&&<button className="overlay" aria-label="Tutup navigasi" onClick={()=>O(false)}/>}
@@ -73,7 +75,7 @@ export default function Page(){
  <nav id="sidebarNav">{groups.map(([title,items])=><div className="navGroup" key={title}><button className="groupToggle" aria-expanded={!collapsed[title]} onClick={()=>Collapse(prev=>({...prev,[title]:!prev[title]}))}>{title}<ChevronDown size={14}/></button>{(compact||!collapsed[title])&&items.map(([k,l,Icon])=><button key={k} title={l} aria-label={l} className={page===k?'selected':''} onClick={()=>go(k)}><Icon size={18}/><span className="navLabel">{l}</span></button>)}</div>)}</nav>
  <div className="sideBottom"><span className="demoDot"/><span>Portal Admin Sekolah</span></div></aside>
  <main><header><div className="crumb"><button className="mobile" aria-label="Buka navigasi" onClick={()=>O(!open)}><Menu size={22}/></button><span>Portal Admin</span><ChevronRight size={14}/><strong>{labels[page]}</strong></div><button className="profile" onClick={()=>auth?show('logout'):show('login')}><span className="avatar">AD</span><span><strong>Admin Sekolah</strong><small>{auth?'Admin Sekolah':'Masuk sebagai admin'}</small></span><ChevronDown size={15}/></button></header>
- <div className="content">{page==='dashboard'?<>
+ <div className="content">{roles.includes('teacher')&&<button className="textBtn" onClick={()=>TeacherMode(true)}>Buka dashboard guru saya</button>}{page==='dashboard'?<>
  <div className="intro"><div><div className="eyebrow"><span/> DASBOR SEKOLAH</div><h1>Ringkasan Sekolah</h1><p>Pantau data sekolah dan aktivitas pembelajaran dalam satu tempat.</p></div><div className="date"><CalendarDays size={17}/> {data.pengaturan?.aktif?`${data.pengaturan.aktif.academic_year} · ${data.pengaturan.aktif.semester}`:'Belum ada semester aktif'}</div></div>
  <section className="hero"><svg viewBox="0 0 420 190" className="heroArt" aria-hidden="true"><g fill="none" stroke="white" strokeOpacity=".13" strokeWidth="1.4"><circle cx="302" cy="94" r="55"/><circle cx="302" cy="94" r="83"/><circle cx="302" cy="94" r="111"/><circle cx="302" cy="94" r="139"/><circle cx="302" cy="94" r="167"/><path d="M251 85l51-25 51 25-51 25-51-25zm17 9v29c20 16 48 16 68 0V94m17-9v30" strokeOpacity=".6" strokeWidth="2.5"/></g><g fill="#c4b5fd"><circle cx="191" cy="94" r="4"/><circle cx="358" cy="33" r="4"/><circle cx="249" cy="154" r="3"/><circle cx="378" cy="134" r="3"/></g></svg><span className="heroLabel"><ShieldCheck size={15}/> RUANG KERJA ADMIN</span><h2>Selamat datang, Admin.</h2><p>Kelola sekolah, bantu guru, dan ikuti kegiatan kelas dari dasbor ini.</p><button onClick={()=>go('guru')}>Buka data guru <ArrowUpRight size={16}/></button></section>
  <div className="stats">{stats.map(([k,l,Icon,c])=><button key={k} className="stat" onClick={()=>go(k)}><div className="statTop"><span className={'tile '+c}><Icon size={21}/></span><ArrowUpRight size={17}/></div><strong>{ready&&auth?(data[k]||[]).filter(r=>k!=='materi'||r.status==='Terbit').length:'—'}</strong><span>{l}</span></button>)}</div>

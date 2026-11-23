@@ -1,0 +1,53 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {calendarDays,moveCalendar,wibDay} from '../lib/teacher-calendar.mjs';
+assert.equal(calendarDays('2026-11-18',false)[0],'2026-11-16');
+assert.equal(calendarDays('2026-11-18',false).length,7);
+assert.equal(calendarDays('2026-11-18',true).length,42);
+assert.equal(moveCalendar('2026-12-31',1,true),'2027-01-01');
+assert.equal(wibDay(new Date('2026-11-18T18:00:00Z')),'2026-11-19');
+assert.ok(calendarDays('2028-02-15',true).includes('2028-02-29'));
+const db=new PGlite(),id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,q=n=>`'${id(n)}'`,sql=s=>db.exec(s),rows=async s=>(await db.query(s)).rows;
+const as=async n=>sql(`reset role;set role authenticated;select set_config('request.jwt.claim.sub','${id(n)}',false)`);
+const call=async(op,payload)=>db.query('select save_teacher_planner($1,$2,$3)',[id(10),op,JSON.stringify(payload)]);
+try{
+ await sql("create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to authenticated,anon;");
+ for(const file of ['202611180001_foundation.sql','202611180011_teacher_home.sql'])await sql(await readFile(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
+ await sql(`insert into auth.users values(${q(1)}),(${q(2)}),(${q(3)}),(${q(4)});insert into schools values(${q(10)},'A');insert into memberships values(${q(10)},${q(1)},'teacher',true),(${q(10)},${q(2)},'teacher',true),(${q(10)},${q(3)},'admin',true),(${q(10)},${q(4)},'student',true);insert into teachers(school_id,id,user_id,name,email) values(${q(10)},${q(11)},${q(1)},'Guru A','a@example.test'),(${q(10)},${q(12)},${q(2)},'Guru B','b@example.test');insert into terms values(${q(10)},${q(13)},'2026/2027','ganjil',true);insert into classes values(${q(10)},${q(14)},${q(13)},'XI-1','XI');insert into subjects values(${q(10)},${q(15)},'Matematika');insert into assignments values(${q(10)},${q(16)},${q(11)},${q(14)},${q(15)}),(${q(10)},${q(17)},${q(12)},${q(14)},${q(15)});`);
+ const [{day,until_day,month}]=await rows("select ((now() at time zone 'Asia/Jakarta')::date+1)::text as day, ((now() at time zone 'Asia/Jakarta')::date+15)::text as until_day, date_trunc('month',now() at time zone 'Asia/Jakarta')::date::text as month");
+ await as(1);
+ await call('entry_save',{kind:'note',day,title:'Privat',body:'Rahasia'});
+ const [entry]=await rows('select * from teacher_planner_entries');
+ await assert.rejects(call('entry_save',{...entry,title:'Stale',revision:0}),{code:'40001'});
+ await call('entry_save',{...entry,title:'Baru'});
+ const meeting={assignment_id:id(16),day,until_day,start_time:'07:00',end_time:'08:00',room:'201'};
+ await call('meeting_create',meeting);
+ assert.equal((await rows('select * from teacher_meetings')).length,3);
+ await assert.rejects(call('meeting_create',meeting),{code:'23P01'});
+ assert.equal((await rows('select * from teacher_meetings')).length,3);
+ await assert.rejects(call('meeting_create',{...meeting,assignment_id:id(17),start_time:'09:00',end_time:'10:00'}),{code:'42501'});
+ const [first]=await rows('select * from teacher_meetings order by day');
+ await call('meeting_edit',{...first,day,start_time:'09:00',end_time:'10:00',scope:'single',reason:'Pindah jam'});
+ assert.equal((await rows("select * from teacher_meetings where start_time='09:00'")).length,1);
+ await assert.rejects(call('meeting_edit',{...first,day,start_time:'11:00',end_time:'12:00',reason:'Stale'}),{code:'40001'});
+ const [updated]=await rows('select * from teacher_meetings order by day');
+ await call('meeting_cancel',{id:updated.id,revision:updated.revision,scope:'future',reason:'Perubahan jadwal'});
+ assert.equal((await rows('select * from teacher_meetings where cancelled')).length,3);
+ assert.ok((await rows('select * from teacher_planner_history')).length>=6);
+ await call('meeting_create',meeting); // Cancelled meetings do not block a replacement.
+ const active=await rows('select * from teacher_meetings where not cancelled order by day');
+ await call('meeting_edit',{id:active[1].id,revision:1,day:active[1].day.toISOString().slice(0,10),start_time:'11:00',end_time:'12:00',scope:'future',reason:'Perubahan pertengahan semester'});
+ assert.equal((await rows("select * from teacher_meetings where not cancelled and start_time='07:00'")).length,1);
+ assert.equal((await rows("select * from teacher_meetings where not cancelled and start_time='11:00'")).length,2);
+ await assert.rejects(call('meeting_create',{...meeting,start_time:'13:00',end_time:'12:00'}),{code:'22023'});
+ await assert.rejects(db.query('select teacher_home($1,$2)',[id(20),month]),{code:'42501'});
+ const home=(await db.query('select teacher_home($1,$2) data',[id(10),month])).rows[0].data;
+ assert.equal(home.name,'Guru A');assert.equal(home.assignments.length,1);assert.equal(home.entries[0].title,'Baru');
+ for(const n of [2,3,4]){await as(n);assert.equal((await rows('select * from teacher_planner_entries')).length,0);assert.equal((await rows('select * from teacher_meetings')).length,0);assert.equal((await rows('select * from teacher_planner_history')).length,0);await assert.rejects(call('entry_delete',{id:entry.id,revision:2}),{code:'42501'});}
+ await as(3);await assert.rejects(db.query('select teacher_home($1,$2)',[id(10),month]),{code:'42501'});
+ await as(1);await assert.rejects(sql('delete from teacher_meetings'),{code:'42501'});
+ await call('entry_delete',{id:entry.id,revision:2});assert.equal((await rows('select * from teacher_planner_entries')).length,0);
+ await sql(`reset role;update memberships set active=false where user_id=${q(1)}`);await as(1);assert.equal((await rows('select * from teacher_meetings')).length,0);await assert.rejects(call('entry_save',{kind:'note',day,title:'X'}),{code:'42501'});
+ console.log('Teacher planner PASS: calendar/WIB, own assignments, private RLS (including admin), inactive role, stale revisions, weekly generation, conflict rollback, single/future edits, cancellation/history.');
+}finally{await db.close()}
