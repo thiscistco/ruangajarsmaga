@@ -1,6 +1,5 @@
 import {NextResponse as R} from 'next/server';
-import {cookies,headers} from 'next/headers';
-import {createServerClient} from '@supabase/ssr';
+import {client} from '../../../lib/server-client';
 import {createClient} from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import {parseAccountWorkbook,importAccounts} from '../../../lib/account-import.mjs';
@@ -11,15 +10,6 @@ const json=(data,status=200)=>R.json(data,{status,headers:{'Cache-Control':'priv
 const err=(error,status=400)=>json({error},status);
 const hosted=process.env.VERCEL==='1';
 const bearer=req=>req.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
-async function client(token){
- const {SUPABASE_URL:url,SUPABASE_PUBLISHABLE_KEY:key}=process.env;
- if(!url||!key)return null;
- if(token)return createClient(url,key,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
- const jar=await cookies();
- const h=await headers();
- const secure=h.get('x-forwarded-proto')?.split(',')[0].trim()==='https'||h.get('host')?.endsWith('.e2b.app')||process.env.NODE_ENV==='production';
- return createServerClient(url,key,{cookies:{getAll:()=>jar.getAll(),setAll:items=>items.forEach(({name,value,options})=>jar.set(name,value,{...options,path:'/',maxAge:options.maxAge??60*60*24*30,httpOnly:true,secure,sameSite:secure&&!hosted?'none':'lax',partitioned:secure&&!hosted}))}});
-}
 async function schoolFor(db,user){
  const {data,error}=await db.from('memberships').select('school_id').eq('user_id',user.id).eq('role','admin').eq('active',true).order('school_id').limit(2);
  if(error||data?.length!==1)return null;

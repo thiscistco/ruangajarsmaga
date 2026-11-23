@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/foundation.mjs && node tests/account-import.mjs && node tests/exports-batches.mjs && node tests/learning-filters.mjs && node tests/web-access.mjs",
+    "test": "node tests/foundation.mjs && node tests/account-import.mjs && node tests/exports-batches.mjs && node tests/learning-filters.mjs && node tests/web-access.mjs && node tests/teacher-home.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
