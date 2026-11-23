@@ -1,4 +1,5 @@
 'use client';
+import LoginPage from './LoginPage';
 import {useEffect,useId,useRef,useState} from 'react';
 import {runAccountBatches} from '../lib/import-batches.mjs';
 import {buildLearningReport,reportWorkbook} from '../lib/learning-export.mjs';
@@ -22,12 +23,13 @@ export default function Page(){
  useEffect(()=>{if(!busy||!importProgress)return;const warn=e=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn)},[busy,importProgress]);
  useEffect(()=>{try{Compact(localStorage.getItem('ruangajar.sidebar.compact')==='true')}catch{}},[]);
  const toggleSidebar=()=>Compact(v=>{try{localStorage.setItem('ruangajar.sidebar.compact',String(!v))}catch{}return !v});
+ const [roles,Roles]=useState([]);
  const sessionToken=useRef(null);
- useEffect(()=>{fetch('/api/sekolah').then(r=>r.json()).then(x=>{if(x.error)throw Error(x.error);D(x.data);A(x.authenticated);C(x.configured);R(true)}).catch(()=>T('Tidak dapat memuat data.'));},[]);
+ useEffect(()=>{fetch('/api/sekolah').then(r=>r.json()).then(x=>{if(x.error)throw Error(x.error);D(x.data);A(x.authenticated);Roles(x.roles||[]);C(x.configured);R(true)}).catch(()=>{T('Tidak dapat memuat sesi. Periksa koneksi lalu coba masuk kembali.');R(true)});},[]);
  const go=k=>{if(busy)return;P(k);F({});S(defaultSort(k));Q('');O(false);M(null);E('')};
  const show=(key,row)=>{if(busy&&importProgress)return;IP(null);E('');IF(null);IR(null);M({key,row})};
  const gate=(key,row)=>auth?show(key,row):show('login');
- async function run(body,{close=true,message='',next}={}){E('');B(true);try{const r=await fetch('/api/sekolah',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,sessionToken:body.action==='login'?undefined:sessionToken.current||undefined})}),x=await r.json();if(!r.ok)throw Error(x.error);if(x.data)D(x.data);if('authenticated'in x){A(x.authenticated);if(!x.authenticated){sessionToken.current=null;D({});}else sessionToken.current=x.accessToken||null;}if(close)M(null);if(next)next(x);if(message){T(message);setTimeout(()=>T(''),3200)}}catch(e){if(modal||['settings','assignment'].includes(body.action))E(e.message);else T(e.message)}finally{B(false)}}
+ async function run(body,{close=true,message='',next}={}){E('');T('');B(true);try{const r=await fetch('/api/sekolah',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,sessionToken:body.action==='login'?undefined:sessionToken.current||undefined})}),x=await r.json();if(!r.ok)throw Error(x.error);if(x.data)D(x.data);if('authenticated'in x){A(x.authenticated);Roles(x.roles||[]);if(!x.authenticated){sessionToken.current=null;D({});}else sessionToken.current=x.accessToken||null;}if(close)M(null);if(next)next(x);if(message){T(message);setTimeout(()=>T(''),3200)}}catch(e){if(modal||['login','logout','settings','assignment'].includes(body.action))E(e.message);else T(e.message)}finally{B(false)}}
  async function runImport(){
   if(!importFile||busy)return;
   const accounts=['guru','siswa'].includes(page);
@@ -63,6 +65,7 @@ export default function Page(){
  const select=(name,label,items,value)=> <label>{label}<select name={name} required defaultValue={value||''}><option value="" disabled>Pilih {label.toLowerCase()}</option>{items.map(i=><option key={i}>{i}</option>)}</select></label>;
  const input=(name,label,type='text',value)=> <label>{label}<input name={name} type={type} defaultValue={value} required maxLength={120}/></label>;
  const list=k=>(data[k]||[]).map(r=>r.nama);
+ if(!auth||!roles.includes('admin'))return <LoginPage ready={ready} busy={busy} configured={configured} error={error||toast} roles={auth?roles:[]} onLogin={credentials=>run({action:'login',...credentials})} onLogout={()=>run({action:'logout'})}/>;
  return <div className={compact?'shell compact':'shell'}>
  {open&&<button className="overlay" aria-label="Tutup navigasi" onClick={()=>O(false)}/>}
  <aside id="sidebar" className={open?'side open':'side'}><button type="button" className="sidebarToggle" onClick={toggleSidebar} aria-controls="sidebarNav" aria-expanded={!compact} aria-label={compact?'Perluas sidebar':'Perkecil sidebar'} title={compact?'Perluas sidebar':'Perkecil sidebar'}>{compact?<PanelLeftOpen size={20}/>:<PanelLeftClose size={20}/>}</button><button aria-label="RuangAjar — Ringkasan" className="brand" onClick={()=>go('dashboard')}><span className="brandIcon"><GraduationCap size={24}/></span><span>Ruang<span>Ajar</span><small>PORTAL ADMIN</small></span></button>

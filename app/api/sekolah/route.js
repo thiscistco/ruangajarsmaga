@@ -4,6 +4,7 @@ import {createServerClient} from '@supabase/ssr';
 import {createClient} from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import {parseAccountWorkbook,importAccounts} from '../../../lib/account-import.mjs';
+import {webAccess} from '../../../lib/web-access.mjs';
 export const maxDuration=60;
 export const dynamic='force-dynamic';
 const json=(data,status=200)=>R.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -36,7 +37,7 @@ async function read(db,s){
 }
 export async function GET(req){
  const token=hosted?undefined:bearer(req);const db=await client(token);if(!db)return json({data:{},authenticated:false,configured:false});
- try{const {data:{user}}=await db.auth.getUser(token);const s=user&&await schoolFor(db,user);return json({data:s?await read(db,s):{},authenticated:!!s,configured:true});}catch{return err('Gagal memuat data sekolah.',503)}
+ try{const {data:{user}}=await db.auth.getUser(token);const access=await webAccess(db,user);return json({data:access?.roles.includes('admin')?await read(db,access.schoolId):{},authenticated:!!access,roles:access?.roles||[],configured:true});}catch{return err('Gagal memuat data sekolah.',503)}
 }
 const actionUsesCookies=action=>action==='login'||action==='logout';
 export async function POST(req){
@@ -48,11 +49,14 @@ export async function POST(req){
  const {action,id}=body;
  if(action==='login'){
   if(typeof body.email!=='string'||typeof body.password!=='string')return err('Masukkan email dan kata sandi.');
-  const {data,error}=await db.auth.signInWithPassword({email:body.email,password:body.password});
+  const {data,error}=await db.auth.signInWithPassword({email:body.email.trim(),password:body.password});
   if(error||!data.user)return err('Tidak bisa masuk. Periksa kredensial.',401);
-  const s=await schoolFor(db,data.user);
-  if(!s){await db.auth.signOut({scope:'local'});return err('Akun tidak memiliki akses admin ke satu sekolah.',403);}
-  try{return json({authenticated:true,accessToken:hosted?undefined:data.session?.access_token,data:await read(db,s)});}catch{await db.auth.signOut({scope:'local'});return err('Login berhasil, tetapi data sekolah gagal dimuat.',503);}
+  try{
+   const access=await webAccess(db,data.user);
+   if(!access){await db.auth.signOut({scope:'local'});return err('Akun tidak memiliki peran aktif dan profil yang sesuai pada satu sekolah. Hubungi admin.',403);}
+   return json({authenticated:true,roles:access.roles,accessToken:hosted?undefined:data.session?.access_token,data:access.roles.includes('admin')?await read(db,access.schoolId):{}});
+  }catch{await db.auth.signOut({scope:'local'});return err('Akses akun belum dapat dimuat. Silakan coba lagi.',503);}
+
  }
  if(action==='logout'){await db.auth.signOut({scope:'local'});return json({authenticated:false});}
  const {data:{user}}=await db.auth.getUser(token);const s=user&&await schoolFor(db,user);if(!s)return err('Masuk sebagai admin terlebih dahulu.',401);
