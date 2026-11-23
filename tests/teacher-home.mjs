@@ -1,7 +1,9 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import {calendarDays,moveCalendar,wibDay} from '../lib/teacher-calendar.mjs';
+import {calendarDays,moveCalendar,wibDay,deviceGreeting} from '../lib/teacher-calendar.mjs';
+for(const [hour,period] of [[0,'malam'],[4,'malam'],[5,'pagi'],[10,'pagi'],[11,'siang'],[14,'siang'],[15,'sore'],[17,'sore'],[18,'malam'],[23,'malam']])assert.equal(deviceGreeting(new Date(2026,10,18,hour)), 'Selamat '+period);
+assert.equal(deviceGreeting(null),'Selamat');
 assert.equal(calendarDays('2026-11-18',false)[0],'2026-11-16');
 assert.equal(calendarDays('2026-11-18',false).length,7);
 assert.equal(calendarDays('2026-11-18',true).length,42);
