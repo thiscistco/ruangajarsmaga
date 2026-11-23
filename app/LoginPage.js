@@ -9,7 +9,7 @@ export default function LoginPage({ready,busy,configured,error,roles,onLogin,onL
  useEffect(()=>{try{setDark(localStorage.getItem('ruangajar.web.dark')==='true')}catch{}},[]);
  const toggle=()=>setDark(value=>{try{localStorage.setItem('ruangajar.web.dark',String(!value))}catch{}return !value});
  return <div className={`${styles.page} ${dark?styles.dark:''}`}>
-  <div className={styles.top}><button type="button" className={styles.theme} aria-pressed={dark} onClick={toggle}>{dark?<Sun size={17}/>:<Moon size={17}/>} {dark?'Light Mode':'Dark Mode'}</button></div>
+  <div className={styles.top}><button type="button" className={styles.theme} aria-label={dark?'Aktifkan mode terang':'Aktifkan mode gelap'} onClick={toggle}>{dark?<Sun size={19} aria-hidden="true"/>:<Moon size={19} aria-hidden="true"/>}</button></div>
   <main className={styles.main}><section className={styles.card} aria-labelledby="login-brand">
    <div className={styles.mark}><BookOpen size={28} aria-hidden="true"/></div><h1 id="login-brand">RuangAjar</h1>
    <h2>{roles.length?'Berhasil masuk':'Masuk'}</h2>
